@@ -24,7 +24,6 @@ const rooms = new Map()
 sub.on("message", (channel, message) => {
   const room = channel.replace("room:", "")
   for (const ws of rooms.get(room) || []) ws.send(message)
-  console.log(message)
 });
 
 const wss = new WebSocketServer({ port: 8080 })
@@ -37,7 +36,6 @@ wss.on("connection", (ws, req: any) => {
   let user: string;
   try {
     const decoded = jwt.verify(token, envFiles.jwtSecret) as { username: string }
-    console.log(decoded)
     user = decoded.username
   } catch {
     return ws.close()
@@ -60,8 +58,6 @@ wss.on("connection", (ws, req: any) => {
       }
       rooms.get(room).add(ws);
     } else if (msg.type === "message" && room) {
-      console.log(msg)
-      console.log(msg.text)
       pub.publish("room:" + room, JSON.stringify({ user, msg: msg.text }))
     }
   })
@@ -69,4 +65,4 @@ wss.on("connection", (ws, req: any) => {
   ws.on("close", () => rooms.get(room)?.delete(ws))
 });
 
-console.log(`websocket server listening on 3005`)
+console.log(`websocket server listening on 8080`)
