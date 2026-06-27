@@ -1,121 +1,95 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { useState, useRef } from 'react'
 import './App.css'
 
+const BACKEND = import.meta.env.VITE_BACKEND_URL
+const WEBSOCKET = import.meta.env.VITE_WS_URL
+
+interface Messages {
+  user: string,
+  msg: string
+}
+
+
 function App() {
-  const [count, setCount] = useState(0)
+
+  const ws = useRef<WebSocket | null>(null)
+  const [messages, setMessages] = useState<Messages[]>([])
+  const [token, setToken] = useState("")
+  const [room, setRoom] = useState("")
+  const [joined, setJoined] = useState(false)
+  const [username, setUsername] = useState("")
+  const [password, setPassword] = useState("")
+  const [text, setText] = useState("")
+
+  const auth = async (path: string) => {
+    const res = await fetch(`${BACKEND}/${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password })
+    })
+    const data = await res.json()
+    if (data.token) {
+      setToken(data.token)
+    } else {
+      console.log(data.error)
+    }
+  }
+
+  const join = () => {
+    ws.current = new WebSocket(`${WEBSOCKET}?token=${token}`)
+    ws.current.onopen = () => {
+      if (!ws.current) throw new Error("undefined")
+      ws.current.send(JSON.stringify({ type: "join", room }))
+    }
+    ws.current.onmessage = (e) => setMessages((m) => [...m, JSON.parse(e.data)])
+    ws.current.onclose = () => { console.log("Connection closed") }
+    setJoined(true)
+  }
+
+  const send = () => {
+    if (!ws.current) throw new Error("Undefined")
+    ws.current.send(JSON.stringify({ type: "message", text }))
+    setText("")
+  }
+
+
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
+    <div style={{ fontFamily: 'sans-serif', maxWidth: 500, margin: "50px auto" }}>
+      <h1> Chat rooms </h1>
+
+      {!token && (
         <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
+          <input placeholder='username' value={username} onChange={(e) => setUsername(e.target.value)} />
+          <input placeholder='password' type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <button onClick={() => auth("signup")}>Sign up</button>
+          <button onClick={() => auth("signin")}>Sign in</button>
         </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
 
-      <div className="ticks"></div>
+      )}
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+      {token && !joined && (
+        <div>
+          <input placeholder='room' value={room} onChange={(e) => setRoom(e.target.value)} />
+          <button onClick={join}> Join </button>
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+      )}
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      {token && joined && (
+        <div>
+          <h2>Your room: {room}</h2>
+          <div style={{ border: '2px solid', height: 300, padding: 8, overflowY: "auto", borderRadius: '10px' }}>
+            {messages.map((m, i) => (
+              <div key={i}><b>{m.user}:</b> {m.msg}</div>
+            ))}
+          </div>
+          <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} />
+          <button onClick={send}> Send </button>
+        </div>
+      )}
+
+
+    </div >
   )
 }
 
